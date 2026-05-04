@@ -1,0 +1,8 @@
+{
+  "name": "Detektor Lokasi",
+  "description": "Aplikasi untuk mendeteksi alamat dan koordinat lokasi Anda saat ini.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
