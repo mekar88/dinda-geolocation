@@ -3,6 +3,8 @@ import { MapPin, Navigation, Map as MapIcon, AlertCircle, Loader2, Copy, CheckCi
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 // Fix for default marker icon in leaflet with Vite
 // @ts-ignore
@@ -35,74 +37,72 @@ export default function App() {
   const [copied, setCopied] = useState<boolean>(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  const getLocation = () => {
+  const getLocation = async () => {
     setLoading(true);
     setError('');
     
-    if (!navigator.geolocation) {
-      setError('Geolokasi tidak didukung oleh browser Anda.');
-      setLoading(false);
-      return;
-    }
+    try {
+      if (Capacitor.isNativePlatform() || Capacitor.getPlatform() === 'web') {
+        const permissions = await Geolocation.checkPermissions();
+        if (permissions.location !== 'granted') {
+          const request = await Geolocation.requestPermissions();
+          if (request.location !== 'granted') {
+            setError('Izin akses lokasi ditolak. Silakan izinkan akses pada pengaturan aplikasi untuk menggunakan fitur ini.');
+            setLoading(false);
+            return;
+          }
+        }
+      }
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
-        const altitude = position.coords.altitude;
-        
-        setLocation({ lat, lng, accuracy, altitude });
-        setLastUpdated(new Date().toLocaleTimeString('id-ID'));
-        
-        try {
-          // OpenStreetMap Nominatim API for reverse geocoding
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
-            headers: {
-              'Accept-Language': 'id-ID,id;q=0.9'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error('Gagal mengambil data alamat');
-          }
-          
-          const data = await response.json();
-          if (data && data.display_name) {
-            setAddress(data.display_name);
-          } else {
-            setAddress('Alamat tidak ditemukan untuk koordinat ini.');
-          }
-        } catch (err) {
-          setError('Terjadi kesalahan saat mengambil alamat. Pastikan Anda memiliki koneksi internet.');
-          console.error(err);
-        } finally {
-          setLoading(false);
-        }
-      },
-      (err) => {
-        setLoading(false);
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            setError('Izin akses lokasi ditolak. Silakan izinkan akses lokasi di browser untuk menggunakan fitur ini.');
-            break;
-          case err.POSITION_UNAVAILABLE:
-            setError('Informasi lokasi tidak tersedia.');
-            break;
-          case err.TIMEOUT:
-            setError('Waktu permintaan akses lokasi habis. Silakan coba lagi.');
-            break;
-          default:
-            setError('Terjadi kesalahan yang tidak diketahui saat mendeteksi lokasi.');
-            break;
-        }
-      },
-      {
+      const position = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 0
+      });
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+      const altitude = position.coords.altitude;
+      
+      setLocation({ lat, lng, accuracy, altitude });
+      setLastUpdated(new Date().toLocaleTimeString('id-ID'));
+      
+      // OpenStreetMap Nominatim API for reverse geocoding
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+        headers: {
+          'Accept-Language': 'id-ID,id;q=0.9'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Gagal mengambil data alamat');
       }
-    );
+      
+      const data = await response.json();
+      if (data && data.display_name) {
+        setAddress(data.display_name);
+      } else {
+        setAddress('Alamat tidak ditemukan untuk koordinat ini.');
+      }
+      
+      setLoading(false);
+    } catch (err: any) {
+      setLoading(false);
+      console.error(err);
+      
+      const errorMessage = err?.message || '';
+      
+      if (errorMessage.includes('denied') || errorMessage.includes('User denied Geolocation')) {
+        setError('Izin akses lokasi ditolak. Silakan izinkan akses lokasi di browser/aplikasi untuk menggunakan fitur ini.');
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+        setError('Waktu permintaan akses lokasi habis. Silakan coba lagi.');
+      } else if (errorMessage.includes('unavailable') || errorMessage.includes('Network location provider')) {
+        setError('Informasi lokasi tidak tersedia. Pastikan GPS/Location service aktif.');
+      } else {
+        setError('Terjadi kesalahan saat mengambil lokasi atau alamat. Pastikan GPS aktif dan ada koneksi internet.');
+      }
+    }
   };
 
   const copyCoordinates = () => {

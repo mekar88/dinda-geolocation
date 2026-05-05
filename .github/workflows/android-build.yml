@@ -40,6 +40,9 @@ jobs:
           npx cap add android
           npx cap sync android
           
+          # Inject Geolocation Permissions into AndroidManifest.xml
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" />' android/app/src/main/AndroidManifest.xml
+          
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./android/gradlew
         
